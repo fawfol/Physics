@@ -116,8 +116,9 @@ int main() {
                    sqrt(vx*vx + vy*vy),
                    atan2(vy, vx) * 180.0 / M_PI);
         } else {
-            printf("\nAiming... Press Enter to launch\n");
+            printf("\nPress 'Enter' to launch\n");
             printf("W S D A for cursor aim\n");
+            printf("Move the cursor further to increase throw power\n");
         }
         for (int y = HEIGHT-1; y >= 0; y--) {
             for (int x = 0; x < WIDTH; x++)
