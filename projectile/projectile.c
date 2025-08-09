@@ -6,8 +6,6 @@
 #include <termios.h>
 #include <sys/ioctl.h>
 
-#define WIDTH 80
-#define HEIGHT 25
 #define G 9.8
 #define SCALE 2.0
 
@@ -47,7 +45,24 @@ void clear_screen() {
 }
 
 int main() {
-    char screen[HEIGHT][WIDTH];
+    struct winsize ws;
+    ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
+    int width = ws.ws_col;
+    int height = ws.ws_row - 4;
+
+    char **screen = malloc(height * sizeof(char *));
+    if (screen == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        return 1;
+    }
+    for (int y = 0; y < height; y++) {
+        screen[y] = malloc(width * sizeof(char));
+        if (screen[y] == NULL) {
+            fprintf(stderr, "Memory allocation failed\n");
+            return 1;
+        }
+    }
+
     double aim_x = 10, aim_y = 5;
     double v0 = 0, angle = 0;
     double px = 0, py = 0, vx = 0, vy = 0;
@@ -59,22 +74,20 @@ int main() {
     double fps = 0.0;
 
     while (1) {
-        //timing
         clock_gettime(CLOCK_MONOTONIC, &ts_now);
-        double dt = (ts_now.tv_sec - ts_prev.tv_sec) + 
+        double dt = (ts_now.tv_sec - ts_prev.tv_sec) +
                     (ts_now.tv_nsec - ts_prev.tv_nsec) / 1e9;
         ts_prev = ts_now;
         if (dt > 0) fps = 0.9 * fps + 0.1 * (1.0 / dt);
 
-        //handle input
         if (kbhit()) {
             int c = getch_nonblock();
             if (c == 'q') break;
             if (!launched) {
-                if (c == 'w' && aim_y < HEIGHT - 2) aim_y++;
+                if (c == 'w' && aim_y < height - 2) aim_y++;
                 if (c == 's' && aim_y > 1) aim_y--;
                 if (c == 'a' && aim_x > 1) aim_x--;
-                if (c == 'd' && aim_x < WIDTH - 2) aim_x++;
+                if (c == 'd' && aim_x < width - 2) aim_x++;
                 if (c == '\n') {
                     double dx = aim_x;
                     double dy = aim_y;
@@ -88,6 +101,7 @@ int main() {
             }
             if (c == 'r') { launched = 0; aim_x = 10; aim_y = 5; }
         }
+
         if (launched) {
             px += vx * dt;
             py += vy * dt;
@@ -95,39 +109,50 @@ int main() {
             if (py < 0) launched = 0;
         }
 
-        for (int y = 0; y < HEIGHT; y++)
-            for (int x = 0; x < WIDTH; x++)
+        for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
                 screen[y][x] = ' ';
 
-        for (int x = 0; x < WIDTH; x++) screen[0][x] = '_';
+        for (int x = 0; x < width; x++) screen[0][x] = '_';
 
         if (launched) {
-            int sx = (int)(px / SCALE);
-            int sy = (int)(py / SCALE);
-            if (sx >= 0 && sx < WIDTH && sy >= 0 && sy < HEIGHT)
+            int sx = (int)(px * SCALE);
+            int sy = (int)(py * SCALE);
+            if (sx >= 0 && sx < width && sy >= 0 && sy < height)
                 screen[sy][sx] = 'O';
         } else {
             screen[(int)aim_y][(int)aim_x] = '+';
         }
+
         clear_screen();
         printf("FPS: %.1f  ", fps);
         if (launched) {
-            printf("Speed: %.2f m/s  Angle: %.1f deg\n", 
-                   sqrt(vx*vx + vy*vy),
-                   atan2(vy, vx) * 180.0 / M_PI);
+            printf("H-Speed: %.2f m/s | V-Speed: %.2f m/s\n", vx, vy);
+     
+            double cursor_angle_deg = atan2(aim_y, aim_x) * 180.0 / M_PI;
+            printf("Cursor Angle: %.1f deg\n", cursor_angle_deg);
+            printf("Aiming... [W/S/A/D] [Enter] to Launch [R] to Reset [Q] to Quit\n");
+            
         } else {
-            printf("\nPress 'Enter' to launch\n");
-            printf("W S D A for cursor aim\n");
-            printf("Move the cursor further to increase throw power\n");
+            printf("H-Speed: %.2f m/s | V-Speed: %.2f m/s\n", vx, vy);
+            double cursor_angle_deg = atan2(aim_y, aim_x) * 180.0 / M_PI;
+            printf("Cursor Angle: %.1f deg\n", cursor_angle_deg);
+            printf(" [W/S/A/D] to Aim \t [Enter] to Launch  \t  [R] to Reset & [Q] to Quit\n");
         }
-        for (int y = HEIGHT-1; y >= 0; y--) {
-            for (int x = 0; x < WIDTH; x++)
+
+        for (int y = height-1; y >= 0; y--) {
+            for (int x = 0; x < width; x++)
                 putchar(screen[y][x]);
             putchar('\n');
         }
 
-        usleep(16000); //60fps
+        usleep(16000);
     }
+
+    for (int y = 0; y < height; y++) {
+        free(screen[y]);
+    }
+    free(screen);
 
     return 0;
 }
