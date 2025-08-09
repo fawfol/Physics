@@ -67,9 +67,13 @@ int main() {
     double aim_x = 10, aim_y = 5;
     double v0 = 0, angle = 0;
     double px = 0, py = 0, vx = 0, vy = 0;
+    
+    //define Mass and Drag property
+    double mass = 1.0; // in kgs
+    double drag_coefficient = 0.47; //sphere drag coeff
     double gravity = G;
     
-    int gameState = 0; // 0=aiming, 1=flying, 2=landed
+    int gameState = 0;
     double final_distance = 0.0;
 
     struct timespec ts_prev, ts_now;
@@ -109,10 +113,27 @@ int main() {
             if (c == 'r') { gameState = 0; aim_x = 10; aim_y = 5; }
         }
 
+        //Mass and Drag syst
         if (gameState == 1) {
+            double speed = sqrt(vx*vx + vy*vy);
+            double force_drag_magnitude = 0.5 * drag_coefficient * speed * speed;
+            double force_drag_x = 0;// -force_drag_magnitude * (vx / (speed + 1e-9)); // Opposes x-velocity
+            double force_drag_y = 0; //-force_drag_magnitude * (vy / (speed + 1e-9)); // Opposes y-velocity
+            
+            double force_net_x = force_drag_x;
+            double force_net_y = force_drag_y - (gravity * mass);
+
+            //calculate Acceleration (a = F/m)
+            double ax = force_net_x / mass;
+            double ay = force_net_y / mass;
+
+            //update V with new acceleration
+            vx += ax * dt;
+            vy += ay * dt;
+            //position
             px += vx * dt;
             py += vy * dt;
-            vy -= gravity * dt;
+            
             if (py < 0) {
                 final_distance = px;
                 gameState = 2;
@@ -137,7 +158,6 @@ int main() {
             sprintf(message, "Distance Covered: %.2f meters", final_distance);
             int msg_start_x = (width - strlen(message)) / 2;
             int y_pos = height / 2;
-
             for(int i = 0; i < strlen(message); i++) {
                 if ((msg_start_x + i) < width && (msg_start_x + i) >= 0) {
                     screen[y_pos][msg_start_x + i] = message[i];
@@ -149,18 +169,16 @@ int main() {
         
         if (gameState == 1) {
              printf("FPS: %.1f | H-Speed: %.2f m/s | V-Speed: %.2f m/s\n", fps, vx, vy);
-             printf("\n");
+             printf("Mass: %.2f kg\n", mass);
              printf("\n");
         } else if (gameState == 0) {
             double potential_v0 = sqrt(aim_x*aim_x + aim_y*aim_y) / SCALE;
-            double visual_x = aim_x /2;
-            double potential_angle = atan2(aim_y, visual_x);
-            
+            double potential_angle = atan2(aim_y, aim_x);
             double potential_vx = potential_v0 * cos(potential_angle);
             double potential_vy = potential_v0 * sin(potential_angle);
             
             printf("FPS: %.1f | H-Speed: %.2f m/s | V-Speed: %.2f m/s\n", fps, potential_vx, potential_vy);
-            printf("Cursor Angle: %.1f deg\n", potential_angle * 180.0 / M_PI);
+            printf("Cursor Angle: %.1f deg | Mass: %.2f kg\n", potential_angle * 180.0 / M_PI, mass);
             printf("[W/S/A/D] to Aim | [Enter] to Launch | [R] to Reset | [Q] to Quit\n");
         } else {
             printf("FPS: %.1f | Landed!\n", fps);
