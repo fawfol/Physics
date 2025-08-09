@@ -114,8 +114,8 @@ int main() {
             py += vy * dt;
             vy -= gravity * dt;
             if (py < 0) {
-                final_distance = px; 
-                gameState = 2;   
+                final_distance = px;
+                gameState = 2;
             }
         }
 
@@ -125,14 +125,14 @@ int main() {
 
         for (int x = 0; x < width; x++) screen[0][x] = '_';
 
-        if (gameState == 1) { 
+        if (gameState == 1) {
             int sx = (int)(px * SCALE);
             int sy = (int)(py * SCALE);
             if (sx >= 0 && sx < width && sy >= 0 && sy < height)
                 screen[sy][sx] = 'O';
-        } else if (gameState == 0) { 
+        } else if (gameState == 0) {
             screen[(int)aim_y][(int)aim_x] = '+';
-        } else if (gameState == 2) { 
+        } else if (gameState == 2) {
             char message[100];
             sprintf(message, "Distance Covered: %.2f meters", final_distance);
             int msg_start_x = (width - strlen(message)) / 2;
@@ -149,7 +149,7 @@ int main() {
         
         if (gameState == 1) {
              printf("FPS: %.1f | H-Speed: %.2f m/s | V-Speed: %.2f m/s\n", fps, vx, vy);
-             printf("\n"); 
+             printf("\n");
              printf("\n");
         } else if (gameState == 0) {
             double potential_v0 = sqrt(aim_x*aim_x + aim_y*aim_y) / SCALE;
