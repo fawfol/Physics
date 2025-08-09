@@ -153,7 +153,9 @@ int main() {
              printf("\n");
         } else if (gameState == 0) {
             double potential_v0 = sqrt(aim_x*aim_x + aim_y*aim_y) / SCALE;
-            double potential_angle = atan2(aim_y, aim_x);
+            double visual_x = aim_x /2;
+            double potential_angle = atan2(aim_y, visual_x);
+            
             double potential_vx = potential_v0 * cos(potential_angle);
             double potential_vy = potential_v0 * sin(potential_angle);
             
