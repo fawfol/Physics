@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <termios.h>
 #include <sys/ioctl.h>
+#include <string.h>
 
 #define G 9.8
 #define SCALE 2.0
@@ -66,8 +67,10 @@ int main() {
     double aim_x = 10, aim_y = 5;
     double v0 = 0, angle = 0;
     double px = 0, py = 0, vx = 0, vy = 0;
-    int launched = 0;
     double gravity = G;
+    
+    int gameState = 0; // 0=aiming, 1=flying, 2=landed
+    double final_distance = 0.0;
 
     struct timespec ts_prev, ts_now;
     clock_gettime(CLOCK_MONOTONIC, &ts_prev);
@@ -83,7 +86,8 @@ int main() {
         if (kbhit()) {
             int c = getch_nonblock();
             if (c == 'q') break;
-            if (!launched) {
+            
+            if (gameState == 0) {
                 if (c == 'w' && aim_y < height - 2) aim_y++;
                 if (c == 's' && aim_y > 1) aim_y--;
                 if (c == 'a' && aim_x > 1) aim_x--;
@@ -96,17 +100,23 @@ int main() {
                     px = 0; py = 0;
                     vx = v0 * cos(angle);
                     vy = v0 * sin(angle);
-                    launched = 1;
+                    gameState = 1;
                 }
+            } else if (gameState == 2) {
+                gameState = 0;
             }
-            if (c == 'r') { launched = 0; aim_x = 10; aim_y = 5; }
+            
+            if (c == 'r') { gameState = 0; aim_x = 10; aim_y = 5; }
         }
 
-        if (launched) {
+        if (gameState == 1) {
             px += vx * dt;
             py += vy * dt;
             vy -= gravity * dt;
-            if (py < 0) launched = 0;
+            if (py < 0) {
+                final_distance = px; 
+                gameState = 2;   
+            }
         }
 
         for (int y = 0; y < height; y++)
@@ -115,29 +125,45 @@ int main() {
 
         for (int x = 0; x < width; x++) screen[0][x] = '_';
 
-        if (launched) {
+        if (gameState == 1) { 
             int sx = (int)(px * SCALE);
             int sy = (int)(py * SCALE);
             if (sx >= 0 && sx < width && sy >= 0 && sy < height)
                 screen[sy][sx] = 'O';
-        } else {
+        } else if (gameState == 0) { 
             screen[(int)aim_y][(int)aim_x] = '+';
+        } else if (gameState == 2) { 
+            char message[100];
+            sprintf(message, "Distance Covered: %.2f meters", final_distance);
+            int msg_start_x = (width - strlen(message)) / 2;
+            int y_pos = height / 2;
+
+            for(int i = 0; i < strlen(message); i++) {
+                if ((msg_start_x + i) < width && (msg_start_x + i) >= 0) {
+                    screen[y_pos][msg_start_x + i] = message[i];
+                }
+            }
         }
 
         clear_screen();
-        printf("FPS: %.1f  ", fps);
-        if (launched) {
-            printf("H-Speed: %.2f m/s | V-Speed: %.2f m/s\n", vx, vy);
-     
-            double cursor_angle_deg = atan2(aim_y, aim_x) * 180.0 / M_PI;
-            printf("Cursor Angle: %.1f deg\n", cursor_angle_deg);
-            printf("Aiming... [W/S/A/D] [Enter] to Launch [R] to Reset [Q] to Quit\n");
+        
+        if (gameState == 1) {
+             printf("FPS: %.1f | H-Speed: %.2f m/s | V-Speed: %.2f m/s\n", fps, vx, vy);
+             printf("\n"); 
+             printf("\n");
+        } else if (gameState == 0) {
+            double potential_v0 = sqrt(aim_x*aim_x + aim_y*aim_y) / SCALE;
+            double potential_angle = atan2(aim_y, aim_x);
+            double potential_vx = potential_v0 * cos(potential_angle);
+            double potential_vy = potential_v0 * sin(potential_angle);
             
+            printf("FPS: %.1f | H-Speed: %.2f m/s | V-Speed: %.2f m/s\n", fps, potential_vx, potential_vy);
+            printf("Cursor Angle: %.1f deg\n", potential_angle * 180.0 / M_PI);
+            printf("[W/S/A/D] to Aim | [Enter] to Launch | [R] to Reset | [Q] to Quit\n");
         } else {
-            printf("H-Speed: %.2f m/s | V-Speed: %.2f m/s\n", vx, vy);
-            double cursor_angle_deg = atan2(aim_y, aim_x) * 180.0 / M_PI;
-            printf("Cursor Angle: %.1f deg\n", cursor_angle_deg);
-            printf(" [W/S/A/D] to Aim \t [Enter] to Launch  \t  [R] to Reset & [Q] to Quit\n");
+            printf("FPS: %.1f | Landed!\n", fps);
+            printf("Final distance is shown below.\n");
+            printf("Press any key to aim again.\n");
         }
 
         for (int y = height-1; y >= 0; y--) {
