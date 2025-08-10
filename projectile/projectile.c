@@ -235,7 +235,7 @@ int main() {
             double potential_vy = potential_v0 * sin(potential_angle);
             
             printf("FPS: %.1f | Potential H-Speed: %.2f m/s | Potential V-Speed: %.2f m/s\n", fps, potential_vx, potential_vy);
-            printf("Cursor Angle: %.1f deg | Mass: %.2f kg | Power: %.1fx\n", potential_angle * 180.0 / M_PI, mass, power);
+            printf("Cursor Angle: %.1f deg | Mass: %.2f kg | Power: %.1fx | Planet (G=%.2f)\n", potential_angle * 180.0 / M_PI, mass, power, gravity);
             printf("[W/S/A/D] to Aim | [Enter] to Launch | [M] Menu | [R] Reset | [Q] Quit\n");
         } else {
             printf("FPS: %.1f | Landed!\n", fps);
