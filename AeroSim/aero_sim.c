@@ -1,94 +1,83 @@
-/*   =================================================================================
-                  Aerodynamic Terminal Simulator
-      ===============================================================================
-	 Description:
-	 simple 2D aerodynamic simulation inside a terminal window and uses the ncurses
-	 library to render air particls flowing around a user-selectable shape
-	
-	 realistic maybe particle deflection to better visualize concepts like drag 
-	 and pressure zones
-	 
-	Features:
-	 Air particles flowing from left to right
-	 collision and deflection physics
-	 Adjustable air speed and density and shi
- 
-	How to Compile:
-  	 You need to have the ncurses library installed. On Debian/Ubuntu, you can
-         install it with: sudo apt-get install libncurses5-dev
-
-	Compile the code using gcc:
-	 gcc -o aero_sim aero_sim.c -lncurses -lm
-
-	Run with ./aero_sim
- 
-
-    =================================================================================
+/* =================================================================================
+ * Aerodynamic Terminal Simulator - V2 (Refactored)
+ * =================================================================================
+ * Description:
+ * A simple 2D aerodynamic simulation in the terminal using ncurses.
+ * This version uses a more realistic physics model based on vector reflection.
+ *
+ * How to Compile:
+ * gcc -o aero_sim_v2 aero_sim_v2.c -lncurses -lm
+ *
+ * How to Run:
+ * ./aero_sim_v2
+ * =================================================================================
  */
 
 #include <ncurses.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <string.h>
 #include <math.h>
 #include <time.h>
 
 #define MAX_PARTICLES 10000
-#define INITIAL_DENSITY 0.25 
-#define INITIAL_SPEED 0.5
+#define INITIAL_DENSITY 0.25
+#define INITIAL_SPEED 0.8
+
+typedef struct {
+    float x, y;
+} Vector2D;
+
+typedef struct {
+    Vector2D pos; 
+    Vector2D vel; 
+} Particle;
 
 typedef enum {
     SHAPE_SQUARE,
-    SHAPE_RECTANGLE,
-    SHAPE_TRIANGLE,
+    SHAPE_AEROFOIL, 
     SHAPE_CIRCLE
 } ShapeType;
 
 typedef struct {
-    float x, y; 
-    float vx, vy; 
-} Particle;
+    ShapeType type;
+    Vector2D pos;
+    Vector2D size;
+} Shape;
 
-Particle particles[MAX_PARTICLES];
-int num_particles;
-int screen_width, screen_height;
-float air_speed = INITIAL_SPEED;
-float air_density = INITIAL_DENSITY;
-ShapeType current_shape = SHAPE_SQUARE;
+typedef struct {
+    Particle particles[MAX_PARTICLES];
+    int num_particles;
+    int screen_width, screen_height;
+    float air_speed;
+    float air_density;
+    Shape object;
+} SimState;
 
-int shape_x, shape_y;
-int shape_w, shape_h;
-
-void init_simulation();
-void reset_particle(int i);
-int is_inside_shape(int x, int y);
-void update_simulation();
-void draw_frame();
-void draw_shape();
-void show_menu();
+void init_simulation(SimState *state);
+void reset_particle(SimState *state, int i);
+void handle_particle_collision(Particle *p, const Shape *object);
+void update_simulation(SimState *state);
+void draw_frame(const SimState *state);
+void show_menu(SimState *state);
 
 int main() {
-
     initscr();
     noecho();
     cbreak();
     curs_set(0);
-    nodelay(stdscr, TRUE); 
+    nodelay(stdscr, TRUE);
     srand(time(NULL));
 
-    init_simulation();
+    SimState state;
+    init_simulation(&state);
 
     while (1) {
         int ch = getch();
-        if (ch == 'q') {
-            break; 
-        }
-        if (ch == 'm') {
-            show_menu(); 
-        }
+        if (ch == 'q') break;
+        if (ch == 'm') show_menu(&state);
 
-        update_simulation();
-        draw_frame();
+        update_simulation(&state);
+        draw_frame(&state);
         usleep(16000); 
     }
 
@@ -96,142 +85,145 @@ int main() {
     return 0;
 }
 
-void init_simulation() {
-    getmaxyx(stdscr, screen_height, screen_width);
+void init_simulation(SimState *state) {
+    getmaxyx(stdscr, state->screen_height, state->screen_width);
 
-    shape_w = 10;
-    shape_h = 10;
-    shape_x = screen_width / 2 - shape_w / 2;
-    shape_y = screen_height / 2 - shape_h / 2;
+    if (state->air_speed == 0) state->air_speed = INITIAL_SPEED;
+    if (state->air_density == 0) state->air_density = INITIAL_DENSITY;
 
-    num_particles = (int)(MAX_PARTICLES * air_density);
-    if (num_particles > MAX_PARTICLES) num_particles = MAX_PARTICLES;
+    state->object.type = SHAPE_AEROFOIL;
+    state->object.size = (Vector2D){25, 8}; 
+    state->object.pos = (Vector2D){
+        state->screen_width / 3 - state->object.size.x / 2,
+        state->screen_height / 2 - state->object.size.y / 2
+    };
 
-    for (int i = 0; i < num_particles; i++) {
-        particles[i].x = (float)(rand() % screen_width);
-        particles[i].y = (float)(rand() % screen_height);
-        particles[i].vx = air_speed;
-        particles[i].vy = 0;
+    state->num_particles = (int)(MAX_PARTICLES * state->air_density);
+    if (state->num_particles > MAX_PARTICLES) state->num_particles = MAX_PARTICLES;
+
+    for (int i = 0; i < state->num_particles; i++) {
+        state->particles[i].pos = (Vector2D){(float)(rand() % state->screen_width), (float)(rand() % state->screen_height)};
+        state->particles[i].vel = (Vector2D){state->air_speed, 0};
     }
 }
 
-void reset_particle(int i) {
-    particles[i].x = 0;
-    particles[i].y = (float)(rand() % screen_height);
-
-    particles[i].vx = air_speed + ((float)rand() / RAND_MAX - 0.5f) * 0.1f;
-    particles[i].vy = 0; 
+void reset_particle(SimState *state, int i) {
+    state->particles[i].pos.x = 0;
+    state->particles[i].pos.y = (float)(rand() % state->screen_height);
+    state->particles[i].vel.x = state->air_speed + ((float)rand() / RAND_MAX - 0.5f) * 0.2f;
+    state->particles[i].vel.y = 0;
 }
 
-int is_inside_shape(int x, int y) {
-
-    if (x < shape_x || x >= shape_x + shape_w || y < shape_y || y >= shape_y + shape_h) {
-        return 0;
+int is_inside_shape(int x, int y, const Shape *object) {
+    if (x < object->pos.x || x >= object->pos.x + object->size.x ||
+        y < object->pos.y || y >= object->pos.y + object->size.y) {
+        return 0; 
     }
 
-    switch (current_shape) {
+    float center_x = object->pos.x + object->size.x / 2.0f;
+    float center_y = object->pos.y + object->size.y / 2.0f;
+
+    switch (object->type) {
         case SHAPE_SQUARE:
-        case SHAPE_RECTANGLE:
-            return 1; 
-        case SHAPE_TRIANGLE: {
-
-            float normalized_x = (float)(x - shape_x) / shape_w;
-            float half_height_at_x = (shape_h / 2.0f) * normalized_x;
-            float center_y = shape_y + shape_h / 2.0f;
-            if (fabs(y - center_y) < half_height_at_x) {
-                return 1;
-            }
-            break;
-        }
+            return 1;
         case SHAPE_CIRCLE: {
+            float radius = object->size.x / 2.0f;
 
-            float center_x = shape_x + shape_w / 2.0f;
-            float center_y = shape_y + shape_h / 2.0f;
-            float radius = shape_w / 2.0f;
-            float dx = x - center_x;
-            float dy = y - center_y;
+            float aspect = 2.0f;
+            float dx = (x - center_x);
+            float dy = (y - center_y) * aspect;
+            return (dx * dx + dy * dy < radius * radius);
+        }
+        case SHAPE_AEROFOIL: {
 
-            float aspect_ratio = 2.0f;
-            if ((dx * dx) + ((dy * dy) * aspect_ratio) < (radius * radius)) {
-                return 1;
-            }
-            break;
+            float norm_x = (x - object->pos.x) / object->size.x; 
+            float thickness = 0.5f * (0.2969f * sqrtf(norm_x) - 0.1260f * norm_x - 0.3516f * powf(norm_x, 2) + 0.2843f * powf(norm_x, 3) - 0.1015f * powf(norm_x, 4));
+            float half_h = object->size.y * thickness;
+            return fabs(y - center_y) < half_h;
         }
     }
     return 0;
 }
 
-void update_simulation() {
-    for (int i = 0; i < num_particles; i++) {
-        int prev_x = (int)roundf(particles[i].x);
+void handle_particle_collision(Particle *p, const Shape *object) {
+    Vector2D normal = {0, 0};
 
-        particles[i].x += particles[i].vx;
-        particles[i].y += particles[i].vy;
+    if (object->type == SHAPE_CIRCLE) {
+        normal.x = p->pos.x - (object->pos.x + object->size.x / 2.0f);
+        normal.y = p->pos.y - (object->pos.y + object->size.y / 2.0f);
+    } else { 
+        normal.x = -1.0f; 
+        normal.y = 0.0f;
 
-        particles[i].vy *= 0.95f;
+        float relative_y = p->pos.y - (object->pos.y + object->size.y / 2.0f);
+        if (p->pos.x > object->pos.x + 1) { 
+             normal.y = (relative_y > 0) ? 0.8f : -0.8f; 
+             normal.x = -0.6f;
+        }
+    }
 
-        if (particles[i].x >= screen_width || particles[i].x < 0 || particles[i].y >= screen_height || particles[i].y < 0) {
-            reset_particle(i);
+    float mag = sqrtf(normal.x * normal.x + normal.y * normal.y);
+    if (mag > 0) {
+        normal.x /= mag;
+        normal.y /= mag;
+    }
+
+    float restitution = 0.4f; 
+    float friction = 0.8f;   
+
+    float vel_dot_normal = p->vel.x * normal.x + p->vel.y * normal.y;
+
+    Vector2D normal_vel = {normal.x * vel_dot_normal, normal.y * vel_dot_normal};
+    Vector2D tangent_vel = {p->vel.x - normal_vel.x, p->vel.y - normal_vel.y};
+
+    normal_vel.x *= -restitution;
+    normal_vel.y *= -restitution;
+
+    tangent_vel.x *= friction;
+    tangent_vel.y *= friction;
+
+    p->vel.x = normal_vel.x + tangent_vel.x;
+    p->vel.y = normal_vel.y + tangent_vel.y;
+}
+
+void update_simulation(SimState *state) {
+    for (int i = 0; i < state->num_particles; i++) {
+        Particle *p = &state->particles[i];
+        Vector2D last_pos = p->pos;
+
+        p->pos.x += p->vel.x;
+        p->pos.y += p->vel.y;
+
+        p->vel.y *= 0.98f;
+
+        if (p->pos.x >= state->screen_width || p->pos.x < 0 || p->pos.y >= state->screen_height || p->pos.y < 0) {
+            reset_particle(state, i);
             continue;
         }
 
-        int current_x = (int)roundf(particles[i].x);
-        int current_y = (int)roundf(particles[i].y);
+        if (is_inside_shape((int)p->pos.x, (int)p->pos.y, &state->object)) {
 
-        if (is_inside_shape(current_x, current_y)) {
-            particles[i].x = (float)prev_x; 
+            p->pos = last_pos;
 
-            float center_y = shape_y + shape_h / 2.0f;
-            float dy = particles[i].y - center_y;
+            handle_particle_collision(p, &state->object);
 
-            particles[i].vy = dy * 0.1f; 
-
-            particles[i].vx = air_speed * 0.5f;
+            p->pos.x += p->vel.x;
+            p->pos.y += p->vel.y;
 
         } else {
 
-            if (particles[i].vx < air_speed) {
-                particles[i].vx += 0.05f;
+            if (p->vel.x < state->air_speed) {
+                p->vel.x += 0.02f;
             }
         }
     }
 }
 
-void draw_frame() {
-    clear();
-
-    for (int i = 0; i < num_particles; i++) {
-        int px = (int)roundf(particles[i].x);
-        int py = (int)roundf(particles[i].y);
-        if (px >= 0 && px < screen_width && py >= 0 && py < screen_height) {
-            mvaddch(py, px, '.');
-        }
-    }
-
-    draw_shape();
-
-    const char* shape_name;
-    switch(current_shape) {
-        case SHAPE_SQUARE: shape_name = "Square"; break;
-        case SHAPE_RECTANGLE: shape_name = "Rectangle"; break;
-        case SHAPE_TRIANGLE: shape_name = "Triangle"; break;
-        case SHAPE_CIRCLE: shape_name = "Circle"; break;
-        default: shape_name = "Unknown"; break;
-    }
+void draw_shape(const Shape *object) {
     attron(A_REVERSE);
-    mvprintw(screen_height - 1, 1, "Speed: %.2f | Density: %.2f | Shape: %s",
-             air_speed, air_density, shape_name);
-    mvprintw(screen_height - 1, screen_width - 20, "Press 'm' for Menu ");
-    attroff(A_REVERSE);
-
-    refresh();
-}
-
-void draw_shape() {
-    attron(A_REVERSE);
-    for (int y = shape_y; y < shape_y + shape_h; y++) {
-        for (int x = shape_x; x < shape_x + shape_w; x++) {
-            if (is_inside_shape(x, y)) {
+    for (int y = object->pos.y; y < object->pos.y + object->size.y; y++) {
+        for (int x = object->pos.x; x < object->pos.x + object->size.x; x++) {
+            if (is_inside_shape(x, y, object)) {
                 mvaddch(y, x, ' ');
             }
         }
@@ -239,59 +231,72 @@ void draw_shape() {
     attroff(A_REVERSE);
 }
 
-void show_menu() {
-    nodelay(stdscr, FALSE); 
-
-    int menu_width = 45;
-    int menu_height = 8;
-    int menu_x = screen_width / 2 - menu_width / 2;
-    int menu_y = screen_height / 2 - menu_height / 2;
+void draw_frame(const SimState *state) {
+    clear();
+    for (int i = 0; i < state->num_particles; i++) {
+        mvaddch((int)state->particles[i].pos.y, (int)state->particles[i].pos.x, '.');
+    }
+    draw_shape(&state->object);
 
     const char* shape_name;
+    switch(state->object.type) {
+        case SHAPE_SQUARE: shape_name = "Square"; break;
+        case SHAPE_AEROFOIL: shape_name = "Aerofoil"; break;
+        case SHAPE_CIRCLE: shape_name = "Circle"; break;
+        default: shape_name = "Unknown"; break;
+    }
+
+    attron(A_REVERSE);
+    mvprintw(state->screen_height - 1, 1, "Speed: %.2f | Density: %.2f | Shape: %s",
+             state->air_speed, state->air_density, shape_name);
+    mvprintw(state->screen_height - 1, state->screen_width - 20, "Press 'm' for Menu ");
+    attroff(A_REVERSE);
+
+    refresh();
+}
+
+void show_menu(SimState *state) {
+    nodelay(stdscr, FALSE); 
+
+    int menu_width = 45, menu_height = 8;
+    int menu_x = state->screen_width / 2 - menu_width / 2;
+    int menu_y = state->screen_height / 2 - menu_height / 2;
 
     int running = 1;
     while(running) {
 
-        switch(current_shape) {
-            case SHAPE_SQUARE: shape_name = "Square"; break;
-            case SHAPE_RECTANGLE: shape_name = "Rectangle"; break;
-            case SHAPE_TRIANGLE: shape_name = "Triangle"; break;
-            case SHAPE_CIRCLE: shape_name = "Circle"; break;
-            default: shape_name = "Unknown"; break;
-        }
-
         attron(A_REVERSE);
-        for (int y = 0; y < menu_height; y++) {
-            mvhline(menu_y + y, menu_x, ' ', menu_width);
-        }
+        for(int y=0; y<menu_height; ++y) mvhline(menu_y + y, menu_x, ' ', menu_width);
         mvprintw(menu_y + 1, menu_x + 2, "--- SETTINGS MENU ---");
         attroff(A_REVERSE);
 
+        const char* shape_name;
+        switch(state->object.type) {
+             case SHAPE_SQUARE: shape_name = "Square"; break;
+             case SHAPE_AEROFOIL: shape_name = "Aerofoil"; break;
+             case SHAPE_CIRCLE: shape_name = "Circle"; break;
+             default: shape_name = "Unknown"; break;
+        }
+
         mvprintw(menu_y + 3, menu_x + 2, "1. Change Shape (Current: %s)", shape_name);
-        mvprintw(menu_y + 4, menu_x + 2, "2. Change Air Speed (Current: %.2f)", air_speed);
-        mvprintw(menu_y + 5, menu_x + 2, "3. Change Air Density (Current: %.2f)", air_density);
+        mvprintw(menu_y + 4, menu_x + 2, "2. Change Air Speed (Current: %.2f)", state->air_speed);
+        mvprintw(menu_y + 5, menu_x + 2, "3. Change Air Density (Current: %.2f)", state->air_density);
         mvprintw(menu_y + 6, menu_x + 2, "Press 'm' or 'q' to exit menu");
 
         int choice = getch();
         switch (choice) {
             case '1':
-                current_shape = (current_shape + 1) % 4; 
-                if (current_shape == SHAPE_SQUARE) { shape_w = 10; shape_h = 10; }
-                else if (current_shape == SHAPE_RECTANGLE) { shape_w = 20; shape_h = 8; }
-                else if (current_shape == SHAPE_TRIANGLE) { shape_w = 15; shape_h = 15; }
-                else if (current_shape == SHAPE_CIRCLE) { shape_w = 12; shape_h = 12; }
-                shape_x = screen_width / 2 - shape_w / 2;
-                shape_y = screen_height / 2 - shape_h / 2;
+                state->object.type = (state->object.type + 1) % 3;
                 break;
             case '2':
-                air_speed += 0.1;
-                if (air_speed > 2.0) air_speed = 0.1;
+                state->air_speed += 0.2;
+                if (state->air_speed > 2.0) state->air_speed = 0.2;
                 break;
             case '3':
-                air_density += 0.05;
-                if (air_density > 1.0) air_density = 0.05;
+                state->air_density += 0.1;
+                if (state->air_density > 1.0) state->air_density = 0.1;
 
-                init_simulation();
+                init_simulation(state);
                 break;
             case 'm':
             case 'q':
