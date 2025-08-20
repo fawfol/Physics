@@ -1,3 +1,31 @@
+/*   =================================================================================
+                  Aerodynamic Terminal Simulator
+      ===============================================================================
+	 Description:
+	 simple 2D aerodynamic simulation inside a terminal window and uses the ncurses
+	 library to render air particls flowing around a user-selectable shape
+	
+	 realistic maybe particle deflection to better visualize concepts like drag 
+	 and pressure zones
+	 
+	Features:
+	 Air particles flowing from left to right
+	 collision and deflection physics
+	 Adjustable air speed and density and shi
+ 
+	How to Compile:
+  	 You need to have the ncurses library installed. On Debian/Ubuntu, you can
+         install it with: sudo apt-get install libncurses5-dev
+
+	Compile the code using gcc:
+	 gcc -o aero_sim aero_sim.c -lncurses -lm
+
+	Run with ./aero_sim
+ 
+
+    =================================================================================
+ */
+
 #include <ncurses.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -8,6 +36,7 @@
 #define MAX_PARTICLES 10000
 #define INITIAL_DENSITY 0.25 
 #define INITIAL_SPEED 0.5
+
 typedef enum {
     SHAPE_SQUARE,
     SHAPE_RECTANGLE,
@@ -30,7 +59,6 @@ ShapeType current_shape = SHAPE_SQUARE;
 int shape_x, shape_y;
 int shape_w, shape_h;
 
-
 void init_simulation();
 void reset_particle(int i);
 int is_inside_shape(int x, int y);
@@ -39,13 +67,13 @@ void draw_frame();
 void draw_shape();
 void show_menu();
 
-
 int main() {
+
     initscr();
     noecho();
     cbreak();
     curs_set(0);
-    nodelay(stdscr, TRUE);
+    nodelay(stdscr, TRUE); 
     srand(time(NULL));
 
     init_simulation();
@@ -53,10 +81,10 @@ int main() {
     while (1) {
         int ch = getch();
         if (ch == 'q') {
-            break;
+            break; 
         }
         if (ch == 'm') {
-            show_menu();
+            show_menu(); 
         }
 
         update_simulation();
@@ -67,6 +95,7 @@ int main() {
     endwin();
     return 0;
 }
+
 void init_simulation() {
     getmaxyx(stdscr, screen_height, screen_width);
 
@@ -89,12 +118,13 @@ void init_simulation() {
 void reset_particle(int i) {
     particles[i].x = 0;
     particles[i].y = (float)(rand() % screen_height);
+
     particles[i].vx = air_speed + ((float)rand() / RAND_MAX - 0.5f) * 0.1f;
-    particles[i].vy = 0;
+    particles[i].vy = 0; 
 }
 
-
 int is_inside_shape(int x, int y) {
+
     if (x < shape_x || x >= shape_x + shape_w || y < shape_y || y >= shape_y + shape_h) {
         return 0;
     }
@@ -102,7 +132,9 @@ int is_inside_shape(int x, int y) {
     switch (current_shape) {
         case SHAPE_SQUARE:
         case SHAPE_RECTANGLE:
+            return 1; 
         case SHAPE_TRIANGLE: {
+
             float normalized_x = (float)(x - shape_x) / shape_w;
             float half_height_at_x = (shape_h / 2.0f) * normalized_x;
             float center_y = shape_y + shape_h / 2.0f;
@@ -112,11 +144,13 @@ int is_inside_shape(int x, int y) {
             break;
         }
         case SHAPE_CIRCLE: {
+
             float center_x = shape_x + shape_w / 2.0f;
             float center_y = shape_y + shape_h / 2.0f;
             float radius = shape_w / 2.0f;
             float dx = x - center_x;
             float dy = y - center_y;
+
             float aspect_ratio = 2.0f;
             if ((dx * dx) + ((dy * dy) * aspect_ratio) < (radius * radius)) {
                 return 1;
@@ -141,28 +175,27 @@ void update_simulation() {
             continue;
         }
 
-        // Collision check
         int current_x = (int)roundf(particles[i].x);
         int current_y = (int)roundf(particles[i].y);
 
         if (is_inside_shape(current_x, current_y)) {
-            particles[i].x = (float)prev_x;
+            particles[i].x = (float)prev_x; 
 
             float center_y = shape_y + shape_h / 2.0f;
             float dy = particles[i].y - center_y;
-            
+
             particles[i].vy = dy * 0.1f; 
-            
+
             particles[i].vx = air_speed * 0.5f;
 
         } else {
+
             if (particles[i].vx < air_speed) {
                 particles[i].vx += 0.05f;
             }
         }
     }
 }
-
 
 void draw_frame() {
     clear();
@@ -193,6 +226,7 @@ void draw_frame() {
 
     refresh();
 }
+
 void draw_shape() {
     attron(A_REVERSE);
     for (int y = shape_y; y < shape_y + shape_h; y++) {
@@ -212,11 +246,12 @@ void show_menu() {
     int menu_height = 8;
     int menu_x = screen_width / 2 - menu_width / 2;
     int menu_y = screen_height / 2 - menu_height / 2;
-    
+
     const char* shape_name;
 
     int running = 1;
     while(running) {
+
         switch(current_shape) {
             case SHAPE_SQUARE: shape_name = "Square"; break;
             case SHAPE_RECTANGLE: shape_name = "Rectangle"; break;
@@ -240,7 +275,7 @@ void show_menu() {
         int choice = getch();
         switch (choice) {
             case '1':
-                current_shape = (current_shape + 1) % 4; // Now 4 shapes
+                current_shape = (current_shape + 1) % 4; 
                 if (current_shape == SHAPE_SQUARE) { shape_w = 10; shape_h = 10; }
                 else if (current_shape == SHAPE_RECTANGLE) { shape_w = 20; shape_h = 8; }
                 else if (current_shape == SHAPE_TRIANGLE) { shape_w = 15; shape_h = 15; }
@@ -255,6 +290,7 @@ void show_menu() {
             case '3':
                 air_density += 0.05;
                 if (air_density > 1.0) air_density = 0.05;
+
                 init_simulation();
                 break;
             case 'm':
@@ -264,5 +300,5 @@ void show_menu() {
         }
     }
 
-    nodelay(stdscr, TRUE);
+    nodelay(stdscr, TRUE); 
 }
