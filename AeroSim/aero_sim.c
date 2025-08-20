@@ -1,15 +1,15 @@
 /* =================================================================================
- * Aerodynamic Terminal Simulator - V2 (Refactored)
+ * Aerodynamic Terminal Simulator - V3 (Interactive Flap)
  * =================================================================================
  * Description:
- * A simple 2D aerodynamic simulation in the terminal using ncurses.
- * This version uses a more realistic physics model based on vector reflection.
+ * A 2D aerodynamic simulation with an interactable controlled flap for that ;
+ * Use 'w' and 's' to change the flap's angle during the simulation.
  *
  * How to Compile:
- * gcc -o aero_sim_v2 aero_sim_v2.c -lncurses -lm
+ * gcc -o aero_sim_v3 aero_sim_v3.c -lncurses -lm
  *
  * How to Run:
- * ./aero_sim_v2
+ * ./aero_sim_v3
  * =================================================================================
  */
 
@@ -34,14 +34,16 @@ typedef struct {
 
 typedef enum {
     SHAPE_SQUARE,
-    SHAPE_AEROFOIL, 
-    SHAPE_CIRCLE
+    SHAPE_AEROFOIL,
+    SHAPE_CIRCLE,
+    SHAPE_FLAP 
 } ShapeType;
 
 typedef struct {
     ShapeType type;
     Vector2D pos;
     Vector2D size;
+    float angle; 
 } Shape;
 
 typedef struct {
@@ -76,6 +78,15 @@ int main() {
         if (ch == 'q') break;
         if (ch == 'm') show_menu(&state);
 
+        if (state.object.type == SHAPE_FLAP) {
+            if (ch == 'w' || ch == 'W') {
+                state.object.angle -= 0.1; 
+            }
+            if (ch == 's' || ch == 'S') {
+                state.object.angle += 0.1; 
+            }
+        }
+
         update_simulation(&state);
         draw_frame(&state);
         usleep(16000); 
@@ -88,15 +99,16 @@ int main() {
 void init_simulation(SimState *state) {
     getmaxyx(stdscr, state->screen_height, state->screen_width);
 
-    if (state->air_speed == 0) state->air_speed = INITIAL_SPEED;
-    if (state->air_density == 0) state->air_density = INITIAL_DENSITY;
+    state->air_speed = INITIAL_SPEED;
+    state->air_density = INITIAL_DENSITY;
 
-    state->object.type = SHAPE_AEROFOIL;
-    state->object.size = (Vector2D){25, 8}; 
+    state->object.type = SHAPE_FLAP;
+    state->object.size = (Vector2D){25, 4}; 
     state->object.pos = (Vector2D){
-        state->screen_width / 3 - state->object.size.x / 2,
-        state->screen_height / 2 - state->object.size.y / 2
+        state->screen_width / 3,
+        state->screen_height / 2
     };
+    state->object.angle = 0.0f; 
 
     state->num_particles = (int)(MAX_PARTICLES * state->air_density);
     if (state->num_particles > MAX_PARTICLES) state->num_particles = MAX_PARTICLES;
@@ -115,32 +127,46 @@ void reset_particle(SimState *state, int i) {
 }
 
 int is_inside_shape(int x, int y, const Shape *object) {
-    if (x < object->pos.x || x >= object->pos.x + object->size.x ||
-        y < object->pos.y || y >= object->pos.y + object->size.y) {
-        return 0; 
+    float center_x = object->pos.x;
+    float center_y = object->pos.y;
+
+    if (object->type == SHAPE_FLAP) {
+
+        float dx = x - center_x;
+        float dy = y - center_y;
+        float cos_a = cosf(-object->angle); 
+        float sin_a = sinf(-object->angle);
+
+        float rotated_x = dx * cos_a - dy * sin_a;
+        float rotated_y = dx * sin_a + dy * cos_a;
+
+        return (fabs(rotated_x) < object->size.x / 2.0f &&
+                fabs(rotated_y) < object->size.y / 2.0f);
     }
 
-    float center_x = object->pos.x + object->size.x / 2.0f;
-    float center_y = object->pos.y + object->size.y / 2.0f;
+    if (x < object->pos.x - object->size.x / 2.0f || x >= object->pos.x + object->size.x / 2.0f ||
+        y < object->pos.y - object->size.y / 2.0f || y >= object->pos.y + object->size.y / 2.0f) {
+        return 0; 
+    }
 
     switch (object->type) {
         case SHAPE_SQUARE:
             return 1;
         case SHAPE_CIRCLE: {
             float radius = object->size.x / 2.0f;
-
-            float aspect = 2.0f;
+            float aspect = 2.0f; 
             float dx = (x - center_x);
             float dy = (y - center_y) * aspect;
             return (dx * dx + dy * dy < radius * radius);
         }
         case SHAPE_AEROFOIL: {
-
-            float norm_x = (x - object->pos.x) / object->size.x; 
+            float norm_x = (x - (object->pos.x - object->size.x/2.0f)) / object->size.x; 
             float thickness = 0.5f * (0.2969f * sqrtf(norm_x) - 0.1260f * norm_x - 0.3516f * powf(norm_x, 2) + 0.2843f * powf(norm_x, 3) - 0.1015f * powf(norm_x, 4));
             float half_h = object->size.y * thickness;
             return fabs(y - center_y) < half_h;
         }
+        case SHAPE_FLAP: 
+            return 1;
     }
     return 0;
 }
@@ -148,40 +174,38 @@ int is_inside_shape(int x, int y, const Shape *object) {
 void handle_particle_collision(Particle *p, const Shape *object) {
     Vector2D normal = {0, 0};
 
-    if (object->type == SHAPE_CIRCLE) {
-        normal.x = p->pos.x - (object->pos.x + object->size.x / 2.0f);
-        normal.y = p->pos.y - (object->pos.y + object->size.y / 2.0f);
-    } else { 
-        normal.x = -1.0f; 
-        normal.y = 0.0f;
+    if (object->type == SHAPE_FLAP) {
 
-        float relative_y = p->pos.y - (object->pos.y + object->size.y / 2.0f);
-        if (p->pos.x > object->pos.x + 1) { 
-             normal.y = (relative_y > 0) ? 0.8f : -0.8f; 
-             normal.x = -0.6f;
+        float cos_a = cosf(object->angle);
+        float sin_a = sinf(object->angle);
+
+        Vector2D local_vel = {
+            p->vel.x * cos_a + p->vel.y * sin_a,
+           -p->vel.x * sin_a + p->vel.y * cos_a
+        };
+
+        if (local_vel.y > 0) { 
+            normal.x = sin_a;
+            normal.y = -cos_a;
+        } else { 
+            normal.x = -sin_a;
+            normal.y = cos_a;
         }
+
+    } else { 
+        normal.x = -1.0f;
+        normal.y = 0.0f;
     }
 
-    float mag = sqrtf(normal.x * normal.x + normal.y * normal.y);
-    if (mag > 0) {
-        normal.x /= mag;
-        normal.y /= mag;
-    }
-
-    float restitution = 0.4f; 
-    float friction = 0.8f;   
-
+    float restitution = 0.4f;
+    float friction = 0.8f;
     float vel_dot_normal = p->vel.x * normal.x + p->vel.y * normal.y;
-
     Vector2D normal_vel = {normal.x * vel_dot_normal, normal.y * vel_dot_normal};
     Vector2D tangent_vel = {p->vel.x - normal_vel.x, p->vel.y - normal_vel.y};
-
     normal_vel.x *= -restitution;
     normal_vel.y *= -restitution;
-
     tangent_vel.x *= friction;
     tangent_vel.y *= friction;
-
     p->vel.x = normal_vel.x + tangent_vel.x;
     p->vel.y = normal_vel.y + tangent_vel.y;
 }
@@ -193,7 +217,6 @@ void update_simulation(SimState *state) {
 
         p->pos.x += p->vel.x;
         p->pos.y += p->vel.y;
-
         p->vel.y *= 0.98f;
 
         if (p->pos.x >= state->screen_width || p->pos.x < 0 || p->pos.y >= state->screen_height || p->pos.y < 0) {
@@ -201,17 +224,12 @@ void update_simulation(SimState *state) {
             continue;
         }
 
-        if (is_inside_shape((int)p->pos.x, (int)p->pos.y, &state->object)) {
-
+        if (is_inside_shape((int)roundf(p->pos.x), (int)roundf(p->pos.y), &state->object)) {
             p->pos = last_pos;
-
             handle_particle_collision(p, &state->object);
-
             p->pos.x += p->vel.x;
             p->pos.y += p->vel.y;
-
         } else {
-
             if (p->vel.x < state->air_speed) {
                 p->vel.x += 0.02f;
             }
@@ -221,8 +239,15 @@ void update_simulation(SimState *state) {
 
 void draw_shape(const Shape *object) {
     attron(A_REVERSE);
-    for (int y = object->pos.y; y < object->pos.y + object->size.y; y++) {
-        for (int x = object->pos.x; x < object->pos.x + object->size.x; x++) {
+
+    float max_dim = fmax(object->size.x, object->size.y);
+    int start_x = object->pos.x - max_dim;
+    int end_x = object->pos.x + max_dim;
+    int start_y = object->pos.y - max_dim;
+    int end_y = object->pos.y + max_dim;
+
+    for (int y = start_y; y < end_y; y++) {
+        for (int x = start_x; x < end_x; x++) {
             if (is_inside_shape(x, y, object)) {
                 mvaddch(y, x, ' ');
             }
@@ -234,7 +259,7 @@ void draw_shape(const Shape *object) {
 void draw_frame(const SimState *state) {
     clear();
     for (int i = 0; i < state->num_particles; i++) {
-        mvaddch((int)state->particles[i].pos.y, (int)state->particles[i].pos.x, '.');
+        mvaddch((int)roundf(state->particles[i].pos.y), (int)roundf(state->particles[i].pos.x), '.');
     }
     draw_shape(&state->object);
 
@@ -243,12 +268,18 @@ void draw_frame(const SimState *state) {
         case SHAPE_SQUARE: shape_name = "Square"; break;
         case SHAPE_AEROFOIL: shape_name = "Aerofoil"; break;
         case SHAPE_CIRCLE: shape_name = "Circle"; break;
+        case SHAPE_FLAP: shape_name = "Flap"; break;
         default: shape_name = "Unknown"; break;
     }
 
     attron(A_REVERSE);
     mvprintw(state->screen_height - 1, 1, "Speed: %.2f | Density: %.2f | Shape: %s",
              state->air_speed, state->air_density, shape_name);
+
+    if (state->object.type == SHAPE_FLAP) {
+        mvprintw(state->screen_height - 2, 1, " Angle: %.2f rad | Controls: W/S ", state->object.angle);
+    }
+
     mvprintw(state->screen_height - 1, state->screen_width - 20, "Press 'm' for Menu ");
     attroff(A_REVERSE);
 
@@ -256,7 +287,7 @@ void draw_frame(const SimState *state) {
 }
 
 void show_menu(SimState *state) {
-    nodelay(stdscr, FALSE); 
+    nodelay(stdscr, FALSE);
 
     int menu_width = 45, menu_height = 8;
     int menu_x = state->screen_width / 2 - menu_width / 2;
@@ -264,7 +295,6 @@ void show_menu(SimState *state) {
 
     int running = 1;
     while(running) {
-
         attron(A_REVERSE);
         for(int y=0; y<menu_height; ++y) mvhline(menu_y + y, menu_x, ' ', menu_width);
         mvprintw(menu_y + 1, menu_x + 2, "--- SETTINGS MENU ---");
@@ -275,6 +305,7 @@ void show_menu(SimState *state) {
              case SHAPE_SQUARE: shape_name = "Square"; break;
              case SHAPE_AEROFOIL: shape_name = "Aerofoil"; break;
              case SHAPE_CIRCLE: shape_name = "Circle"; break;
+             case SHAPE_FLAP: shape_name = "Flap"; break;
              default: shape_name = "Unknown"; break;
         }
 
@@ -286,7 +317,11 @@ void show_menu(SimState *state) {
         int choice = getch();
         switch (choice) {
             case '1':
-                state->object.type = (state->object.type + 1) % 3;
+                state->object.type = (state->object.type + 1) % 4; 
+
+                state->object.pos = (Vector2D){state->screen_width / 3, state->screen_height / 2};
+                if(state->object.type == SHAPE_FLAP) state->object.size = (Vector2D){25, 4};
+                else state->object.size = (Vector2D){15, 15};
                 break;
             case '2':
                 state->air_speed += 0.2;
@@ -295,7 +330,6 @@ void show_menu(SimState *state) {
             case '3':
                 state->air_density += 0.1;
                 if (state->air_density > 1.0) state->air_density = 0.1;
-
                 init_simulation(state);
                 break;
             case 'm':
@@ -305,5 +339,5 @@ void show_menu(SimState *state) {
         }
     }
 
-    nodelay(stdscr, TRUE); 
+    nodelay(stdscr, TRUE);
 }
