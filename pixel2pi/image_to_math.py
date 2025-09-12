@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 
 #prep and load image
-img = Image.open("my_image.jpg").convert("L") # put your iamge int he same folder as this file and then paste yo image name over here. idk how to create a image input option 
+img = Image.open("me.jpeg").convert("L") # put your iamge int he same folder as this file and then paste yo image name over here. idk how to create a image input option 
 img = img.resize((64, 64))
 data = np.array(img) / 255.0
 h, w = data.shape
@@ -14,7 +14,7 @@ fft_shifted = np.fft.fftshift(fft_result)
 
 # finding the strongest term
 flat_indices = np.argsort(np.abs(fft_shifted.flatten()))[::-1] ## sort by magntinude
-top_n = 20  #choose top N terms
+top_n = 499  #choose top N terms u can change this to get more details or less details
 indices = np.unravel_index(flat_indices[:top_n], fft_shifted.shape)
 
 terms = []
