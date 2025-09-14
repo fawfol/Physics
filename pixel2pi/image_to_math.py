@@ -2,44 +2,65 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 
+######################INSTRUCTION#################################
+# PUT YOUR IMAGE IN SAME FOLDER AS THIS CODE FILE               ##
+# AND CHANGE THE INMAGE NAME AT HERE : 				##	
+#								##
+img_original = Image.open("me.jpeg")	#prep and load img	##
+#								##
+#								##
+#SET THE IMAGE RESOLUTION FOR ANALYSIS                      	##
+# Smaller values are obviously faster...                	##
+# Larger values(128, 256) have more detail but slower no shit	##
+image_resolution = 128                                        	##
+##################################################################
+
+
 
 #---------------------------------------------------------------##
 
 ##################################################################
-#SWITCH FOR WITH OR WITHOUT COLOUR OPTION			##
-# Set to False to run the grayscale version (lightweight)	##
-# Set to True to run the new color version         		##
-process_in_color = True                          		##
-##################################################################
-
-
-
-##################################################################
-#SET VALUE OF TOP N						##
-#500 seems to be the threshold for somewhat good detail		##
-top_n = 1000 # you can set how many frequency terms to use	##
+#SWITCH FOR WITH OR WITHOUT COLOUR OPTION         		##
+# Set to False to run the grayscale version (lightweight)   	##
+# Set to True to run the new color version                  	##
+process_in_color = True                                     	##
 ##################################################################
 
 
 ##################################################################
-#SWITCH TO PRINT THE MATH EQUATION (can be very long!)		##
-# Set to True to print the equation to the terminal.       	##
-# Best used with a very small top_n (e.g., 5).             	##
-print_equation = False                                     	##
+#SET VALUE OF TOP N                           			##
+#500 seems to be the threshold for somewhat good detail     	##
+top_n = 3000 # you can set how many frequency terms to use   	##
 ##################################################################
 
+
+##################################################################
+#SWITCH TO PRINT THE MATH EQUATION (can be very long!)     	##
+# Set to True to print the equation to the terminal.         	##
+# Best used with a very small top_n (e.g., 5).               	##
+print_equation = False                                       	##
+##################################################################
+
+
+##################################################################
+#SET THE IMAGE RESOLUTION FOR ANALYSIS                      	##
+# Smaller values are obviously faster...                	##
+# Larger values(128, 256) have more detail but slower no shit	##
+image_resolution = 128                                        	##
+##################################################################
+
+###############  BY THE WAY  #####################################
+#Avg phones have modest of :					##
+#				(128 as image_resolution)	##
+#				(4000 for top N value)		##
 
 #---------------------------------------------------------------##
 
-
-
-# Prep and load image
-img_original = Image.open("me.jpeg")
 
 # greyscale path
 if not process_in_color:
     img = img_original.convert("L")
-    img = img.resize((64, 64))
+    img = img.resize((image_resolution, image_resolution))
     data = np.array(img) / 255.0
     h, w = data.shape
 
@@ -62,6 +83,7 @@ if not process_in_color:
         terms.append((freq_x, freq_y, amp, phase))
 
     #print equation for greyscale if true
+    if print_equation:
         print("Approximation Equation for Greyscale Image:")
         print("f(x, y) ≈ ", end="")
         eq_parts = []
@@ -91,7 +113,7 @@ if not process_in_color:
 
 # coloured path
 else:
-    img = img_original.resize((64, 64))
+    img = img_original.resize((image_resolution, image_resolution))
     data = np.array(img) / 255.0
     h, w, _ = data.shape
     reconstructed_color = np.zeros_like(data)
