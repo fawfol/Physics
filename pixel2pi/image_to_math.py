@@ -4,13 +4,13 @@ from PIL import Image
 
 ######################INSTRUCTION#################################
 # PUT YOUR IMAGE IN SAME FOLDER AS THIS CODE FILE               ##
-# AND CHANGE THE INMAGE NAME AT HERE : 				##	
-#								##
-img_original = Image.open("me.jpeg")	#prep and load img	##
-#								##
-#								##
+# AND CHANGE THE INMAGE NAME AT HERE : 				            ##
+#								                                ##
+img_original = Image.open("me.jpeg")	#prep and load img	    ##
+#								                                ##
+#								                                ##
 #SET THE IMAGE RESOLUTION FOR ANALYSIS                      	##
-# Smaller values are obviously faster...                	##
+# Smaller values are obviously faster...                	    ##
 # Larger values(128, 256) have more detail but slower no shit	##
 image_resolution = 128                                        	##
 ##################################################################
@@ -20,7 +20,7 @@ image_resolution = 128                                        	##
 #---------------------------------------------------------------##
 
 ##################################################################
-#SWITCH FOR WITH OR WITHOUT COLOUR OPTION         		##
+#SWITCH FOR WITH OR WITHOUT COLOUR OPTION         		        ##
 # Set to False to run the grayscale version (lightweight)   	##
 # Set to True to run the new color version                  	##
 process_in_color = True                                     	##
@@ -28,7 +28,7 @@ process_in_color = True                                     	##
 
 
 ##################################################################
-#SET VALUE OF TOP N                           			##
+#SET VALUE OF TOP N                           			        ##
 #500 seems to be the threshold for somewhat good detail     	##
 top_n = 3000 # you can set how many frequency terms to use   	##
 ##################################################################
@@ -44,15 +44,17 @@ print_equation = False                                       	##
 
 ##################################################################
 #SET THE IMAGE RESOLUTION FOR ANALYSIS                      	##
-# Smaller values are obviously faster...                	##
+# Smaller values are obviously faster...                	    ##
 # Larger values(128, 256) have more detail but slower no shit	##
 image_resolution = 128                                        	##
 ##################################################################
 
 ###############  BY THE WAY  #####################################
-#Avg phones have modest of :					##
-#				(128 as image_resolution)	##
-#				(4000 for top N value)		##
+#Avg phones have modest of :					                ##
+#				(128 as image_resolution)	                    ##
+#				(4000 for top N value)		                    ##
+##################################################################
+
 
 #---------------------------------------------------------------##
 
